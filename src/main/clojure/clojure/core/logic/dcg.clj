@@ -1,7 +1,6 @@
 (ns clojure.core.logic.dcg
   (:refer-clojure :exclude [reify == inc])
-  (:use [clojure.core.logic minikanren prelude])
-  (:require [clojure.core.logic.nonrel :as nonrel]))
+  (:use [clojure.core.logic minikanren prelude nonrel tabled]))
 
 ;; TODO: think about indexing
 ;; TODO: note that rest args are problematic since we add two invisible args
