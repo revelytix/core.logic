@@ -124,15 +124,23 @@
                      (handle-cclause fsym osym cs)))
              pcss))))
 
-(comment
-  (defmacro def-->a [name args & pcss]
+(defmacro def-->a [name args & pcss]
+  (let [fsym (gensym "l1_")
+        osym (gensym "o")]
+    `(defna ~name [~@args ~fsym ~osym]
+       ~@(map (fn [[p & cs]]
+                (list (-> p (conj '_) (conj '_))
+                      (handle-cclause fsym osym cs)))
+              pcss))))
+
+(defmacro def-->u [name args & pcss]
     (let [fsym (gensym "l1_")
           osym (gensym "o")]
-      `(defna ~name [~@args ~fsym ~osym]
+      `(defnu ~name [~@args ~fsym ~osym]
          ~@(map (fn [[p & cs]]
                   (list (-> p (conj '_) (conj '_))
                         (handle-cclause fsym osym cs)))
-                pcss)))))
+                pcss))))
 
 (comment
   (-->e det
@@ -256,6 +264,10 @@
     ([[?e . ?es]] wso (expro ?e) wso (exprso! ?es))
     ([[]] []))
 
+  (def-->a exprsou [exs]
+    ([[?e . ?es]] wso (expro ?e) wso (exprsou ?es))
+    ([[]] []))
+
   (def-->e ^:tabled exprsot [exs]
     ([[?e . ?es]] wso (expro ?e) wso (exprsot ?es))
     ([[]] []))
@@ -263,6 +275,9 @@
   ;; (_.0)
   (run* [q]
     (wso (vec "  ") []))
+
+  (run* [q]
+    (wso (vec "  ") q))
 
   ;; grows linearly with the number of spaces
   ;; 1s, 18spaces
@@ -292,6 +307,17 @@
   ;; ((\1 \2 \3))
   (run* [q]
     (numo q (vec "123") []))
+
+  ;; ~170ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e3]
+       (run* [q]
+         (numo q (vec "1234567890") [])))))
+
+  (run* [q]
+    (exist [x]
+     (numo x (vec "1234567890") q)))
 
   ;; ((\a \b \c))
   (run* [q]
@@ -329,6 +355,11 @@
   ;; 64, holy crap this is the bug
   (count (run* [q]
            (exprso q (vec " (+ 1 2 3 4 5 7)") [])))
+
+  ;; still 32 answers
+  (count
+   (run* [q]
+     (exprsou q (vec " (+ 1 2 3 4 5)") [])))
 
   (dotimes [_ 1]
     (time
