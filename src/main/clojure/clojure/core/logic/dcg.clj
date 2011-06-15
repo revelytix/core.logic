@@ -1,6 +1,7 @@
 (ns clojure.core.logic.dcg
   (:refer-clojure :exclude [reify == inc])
-  (:use [clojure.core.logic minikanren prelude nonrel tabled]))
+  (:use [clojure.core.logic minikanren prelude nonrel tabled]
+        [clojure.pprint :only [pprint]]))
 
 ;; TODO: think about indexing
 ;; TODO: note that rest args are problematic since we add two invisible args
@@ -124,6 +125,16 @@
              pcss))))
 
 (comment
+  (defmacro def-->a [name args & pcss]
+    (let [fsym (gensym "l1_")
+          osym (gensym "o")]
+      `(defna ~name [~@args ~fsym ~osym]
+         ~@(map (fn [[p & cs]]
+                  (list (-> p (conj '_) (conj '_))
+                        (handle-cclause fsym osym cs)))
+                pcss)))))
+
+(comment
   (-->e det
     ('[the])
     ('[a]))
@@ -190,14 +201,15 @@
   (def alnum (into digits (concat (cr \a \z) (cr \A \Z))))
   (def nonalnum (into #{} "+/-*><="))
   
+  ;; it may very well be that this Prolog is gross
   (-->e wso
-    ([\space] wso)
+    ([\space] wso #_(!dcg (trace-lvars "wso!")))
     ([]))
 
   (def-->e digito [x]
     ([_] [x]
        (!dcg
-        (nonrel/project [x]
+        (project [x]
           (== (contains? digits x) true)))))
 
   (def-->e numo [x]
@@ -206,10 +218,12 @@
 
   (declare symro)
   
+  ;; taking out the conde makes no difference
+
   (def-->e symo [x]
     ([[?a . ?as]] [?a]
        (!dcg
-        (nonrel/project [?a]
+        (project [?a]
           (conde
             ((== (contains? alpha ?a) true))
             ((== (contains? nonalnum ?a) true)))))
@@ -218,7 +232,7 @@
   (def-->e symro [x]
     ([[?a . ?as]] [?a]
        (!dcg
-        (nonrel/project [?a]
+        (project [?a]
           (conde
             ((== (contains? alnum ?a) true))
             ((== (contains? nonalnum ?a) true)))))
@@ -238,9 +252,34 @@
     ([[?e . ?es]] wso (expro ?e) wso (exprso ?es))
     ([[]] []))
 
+  (def-->a exprso! [exs]
+    ([[?e . ?es]] wso (expro ?e) wso (exprso! ?es))
+    ([[]] []))
+
+  (def-->e ^:tabled exprsot [exs]
+    ([[?e . ?es]] wso (expro ?e) wso (exprsot ?es))
+    ([[]] []))
+
   ;; (_.0)
   (run* [q]
     (wso (vec "  ") []))
+
+  ;; grows linearly with the number of spaces
+  ;; 1s, 18spaces
+  (dotimes [_ 10]
+    (let [s (vec "                  ")]
+     (time
+      (dotimes [_ 1e4]
+        (run* [q]
+          (wso s []))))))
+
+  ;; 60ms
+  (dotimes [_ 10]
+    (let [s (vec " ")]
+     (time
+      (dotimes [_ 1e4]
+        (run* [q]
+          (wso s []))))))
 
   ;; ()
   (run* [q]
@@ -274,6 +313,67 @@
   ;; w/ def-->e ~1400ms
   (dotimes [_ 10]
     (let [s (vec " (+ abc b '(1 23))  ")]
+      (time
+       (dotimes [_ 50]
+         (run 1 [q]
+           (exprso q s []))))))
+
+  ;; wso gets call 563 times ?!
+  (run 1 [q]
+    (exprso q (vec " (+ abc b 1234 56)") []))
+
+  ;; 32, why 32 identical solutions?
+  (pprint (run 32 [q]
+            (exprso q (vec " (+ 1 2 3 4 5)") [])))
+
+  ;; 64, holy crap this is the bug
+  (count (run* [q]
+           (exprso q (vec " (+ 1 2 3 4 5 7)") [])))
+
+  (dotimes [_ 1]
+    (time
+     (dotimes [_ 1e4]
+       (run 1 [q]
+         (wso (vec " ") [])))))
+
+  ;; same here 563 times ?!
+  (run 1 [q]
+    (exprso! q (vec " (+ abc b 1234 56)") []))
+
+  ;; n^2 growth on number of tokens
+  ;; clearly not right, will need to look into it
+  ;; 779ms
+  (dotimes [_ 1]
+    (let [s (vec "(+ 1 2 3 4 5 6 7")]
+      (time
+       (dotimes [_ 15]
+         (run 1 [q]
+           (exprso q s []))))))
+
+
+  ;; 775ms
+  (dotimes [_ 1]
+    (let [s (vec "(+ 1 2 3 4 5 6 7")]
+      (time
+       (dotimes [_ 15]
+         (run 1 [q]
+           (exprso! q s []))))))
+
+  ;; doesn't work ...
+  (run 1 [q]
+    (exprsot q (vec " (+ abc b 1234 56)") []))
+
+  ;; tabling and cuts don't work together
+  (dotimes [_ 1]
+    (let [s (vec "(+ 1 2 3 4 5 6 7")]
+      (time
+       (dotimes [_ 15]
+         (run 1 [q]
+           (exprsot q s []))))))
+
+  ;; 8s?
+  (dotimes [_ 1]
+    (let [s (vec "(+ abc b 1234 56")]
       (time
        (dotimes [_ 50]
          (run 1 [q]
