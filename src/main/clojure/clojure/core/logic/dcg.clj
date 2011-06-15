@@ -8,6 +8,7 @@
 ;; TODO: make handle-clause polymorphic, we don't want to futz around with
 ;; with forcing macroexpand
 ;; TODO: exist? and !dcg? are odd, why can't we check w/ `sym
+;; TODO: !, support transformation to condu
 
 (defn lsym [n]
   (gensym (str "l" n "_")))
@@ -209,9 +210,9 @@
   (def alnum (into digits (concat (cr \a \z) (cr \A \Z))))
   (def nonalnum (into #{} "+/-*><="))
   
-  ;; it may very well be that this Prolog is gross
   (-->e wso
-    ([\space] wso #_(!dcg (trace-lvars "wso!")))
+    ([\space] wso)
+    ([\newline] wso)
     ([]))
 
   (def-->e digito [x]
@@ -226,8 +227,6 @@
 
   (declare symro)
   
-  ;; taking out the conde makes no difference
-
   (def-->e symo [x]
     ([[?a . ?as]] [?a]
        (!dcg
@@ -255,32 +254,33 @@
     ([[:list ?list]] [\(] (exprso ?list) [\)])
     ([[:sym :quote ?q]] [\'] (expro ?q)))
 
-  ;; TODO: we need cut here, we found a valid parse
+  ;; FIXME: this handles trailing whitespace but not the next one
   (def-->e exprso [exs]
     ([[?e . ?es]] wso (expro ?e) wso (exprso ?es))
     ([[]] []))
 
-  (def-->a exprso! [exs]
-    ([[?e . ?es]] wso (expro ?e) wso (exprso! ?es))
-    ([[]] []))
-
-  (def-->a exprsou [exs]
-    ([[?e . ?es]] wso (expro ?e) wso (exprsou ?es))
-    ([[]] []))
-
-  (def-->e ^:tabled exprsot [exs]
-    ([[?e . ?es]] wso (expro ?e) wso (exprsot ?es))
-    ([[]] []))
+  (defne exprso [exs l1 o]
+    ([[?e . ?es] _ _]
+       (exist [l2 l3 l4]
+         (condu
+           ((exist []
+              (wso l1 l2)
+              (expro ?e l2 l3)
+              (wso l3 l4))
+            (exprso ?es l4 o)))))
+    ([[] _ _] (== l1 o)))
 
   ;; (_.0)
   (run* [q]
     (wso (vec "  ") []))
 
   (run* [q]
-    (wso (vec "  ") q))
+    (wso (vec "   ") q))
 
   ;; grows linearly with the number of spaces
-  ;; 1s, 18spaces
+  ;; 1.4s, 18spaces
+  ;; going through whitespace seems pretty darn fast
+  ;; 180000 characters
   (dotimes [_ 10]
     (let [s (vec "                  ")]
      (time
@@ -332,81 +332,57 @@
     (expro q (vec "abc") []))
 
   ;; (([:list ([:sym (\+)] [:sym (\a \b \c)] [:sym (\b)] [:sym :quote [:list ([:num [\1]] [:num (\2 \3)])]])]))
+  ;; TODO: doesn't handle trailing whitespace
   (run 1 [q]
-    (exprso q (vec " (+ abc b '(1 23))  ") []))
+    (exprso q (vec " (+ abc b '(1 23)) ") []))
 
-  ;; w/ def-->a ~2500ms
-  ;; w/ def-->e ~1400ms
+  (run 1 [q]
+    (exprso q (vec "((+ 1 2) '(- 3 4))") []))
+
   (dotimes [_ 10]
-    (let [s (vec " (+ abc b '(1 23))  ")]
-      (time
-       (dotimes [_ 50]
-         (run 1 [q]
-           (exprso q s []))))))
-
-  ;; wso gets call 563 times ?!
-  (run 1 [q]
-    (exprso q (vec " (+ abc b 1234 56)") []))
-
-  ;; 32, why 32 identical solutions?
-  (pprint (run 32 [q]
-            (exprso q (vec " (+ 1 2 3 4 5)") [])))
-
-  ;; 64, holy crap this is the bug
-  (count (run* [q]
-           (exprso q (vec " (+ 1 2 3 4 5 7)") [])))
-
-  ;; still 32 answers
-  (count
-   (run* [q]
-     (exprsou q (vec " (+ 1 2 3 4 5)") [])))
-
-  (dotimes [_ 1]
     (time
-     (dotimes [_ 1e4]
+     (dotimes [_ 1e3]
        (run 1 [q]
-         (wso (vec " ") [])))))
+         (exprso q (vec "((+ 1 2) '(- 3 4))") [])))))
 
-  ;; same here 563 times ?!
-  (run 1 [q]
-    (exprso! q (vec " (+ abc b 1234 56)") []))
-
-  ;; n^2 growth on number of tokens
-  ;; clearly not right, will need to look into it
-  ;; 779ms
-  (dotimes [_ 1]
-    (let [s (vec "(+ 1 2 3 4 5 6 7")]
-      (time
-       (dotimes [_ 15]
-         (run 1 [q]
-           (exprso q s []))))))
-
-
-  ;; 775ms
-  (dotimes [_ 1]
-    (let [s (vec "(+ 1 2 3 4 5 6 7")]
-      (time
-       (dotimes [_ 15]
-         (run 1 [q]
-           (exprso! q s []))))))
-
-  ;; doesn't work ...
-  (run 1 [q]
-    (exprsot q (vec " (+ abc b 1234 56)") []))
-
-  ;; tabling and cuts don't work together
-  (dotimes [_ 1]
-    (let [s (vec "(+ 1 2 3 4 5 6 7")]
-      (time
-       (dotimes [_ 15]
-         (run 1 [q]
-           (exprsot q s []))))))
-
-  ;; 8s?
-  (dotimes [_ 1]
-    (let [s (vec "(+ abc b 1234 56")]
-      (time
-       (dotimes [_ 50]
-         (run 1 [q]
-           (exprso q s []))))))
+  ;; this seems slow
+  (dotimes [_ 10]
+    (let [v (vec "((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4)) 
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))
+                  ((+ 1 2) '(- 3 4)) ((+ 1 2) '(- 3 4))")]
+     (time
+      (dotimes [_ 1]
+        (run 1 [q]
+          (exprso q v []))))))
   )
