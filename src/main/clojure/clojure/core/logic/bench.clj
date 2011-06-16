@@ -132,6 +132,22 @@
   )
 
 ;; =============================================================================
+;; fast-zebra
+
+;; experiment with groundness checking here
+;; avoid unification, avoid var creation, avoid consing
+
+(defn firsto [l a]
+  (exist [d]
+    (conso a d l)))
+
+(comment
+  ;; if l is ground, we can use first
+  ;; if a is ground, we can just do ==
+  ;; if a is not ground, unify
+  )
+
+;; =============================================================================
 ;; nqueens
 
 ;; Bratko pg 103

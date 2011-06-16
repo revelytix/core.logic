@@ -226,7 +226,11 @@
     ([[?d]] (digito ?d)))
 
   (declare symro)
-  
+
+  ;; TODO: if we know ?a is ground don't need to unify
+  ;; this case is trickier, if x is ground sequential?
+  ;; NOTE: optimizing x might be unwise, we should focus on
+  ;; the two invisible vars for now
   (def-->e symo [x]
     ([[?a . ?as]] [?a]
        (!dcg
@@ -289,19 +293,22 @@
       (dotimes [_ 1]
         (lazy-run 1 [q] (wso s []))))))
 
+  ;; this won't work for lists which have
+  ;; vars in them, but that's not how DCGs
+  ;; are used.
   (defn wso-fast [l1 o]
     (conde
       ((if (lvar? l1)
          (exist [l3]
            (== l1 (lcons \space l3))
            (wso-fast l3 o))
-         (cond
+         (cond ;; TODO: check sequential?
           (= (first l1) \space) (wso-fast (rest l1) o)
           (empty? l1) (== o ())
           :else u#)))
       ((== l1 o))))
 
-  ;; 5ms!, this is the ideal of course
+  ;; 3ms!, this is the ideal of course
   (let [s (conj (vec (take 10000 (repeat \space))) \f)]
    (dotimes [_ 10]
      (time
