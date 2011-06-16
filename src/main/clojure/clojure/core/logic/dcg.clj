@@ -211,9 +211,9 @@
   (def nonalnum (into #{} "+/-*><="))
   
   (-->e wso
+    ([])
     ([\space] wso)
-    ([\newline] wso)
-    ([]))
+    ([\newline] wso))
 
   (def-->e digito [x]
     ([_] [x]
@@ -279,14 +279,46 @@
 
   ;; grows linearly with the number of spaces
   ;; 1.4s, 18spaces
-  ;; going through whitespace seems pretty darn fast
-  ;; 180000 characters
-  (dotimes [_ 10]
-    (let [s (vec "                  ")]
+  ;; 180000 characters,  going through whitespace seems pretty darn fast
+  ;; 1000 characters
+  ;; 60ms for 1e3
+  ;; 6000ms for 1e4, 100X slower
+  (let [s (take 10000 (repeat \space))]
+   (dotimes [_ 10]
      (time
-      (dotimes [_ 1e4]
-        (run* [q]
-          (wso s []))))))
+      (dotimes [_ 1]
+        (lazy-run 1 [q] (wso s []))))))
+
+  (defn wso-fast [l1 o]
+    (conde
+      ((if (lvar? l1)
+         (exist [l3]
+           (== l1 (lcons \space l3))
+           (wso-fast l3 o))
+         (cond
+          (= (first l1) \space) (wso-fast (rest l1) o)
+          (empty? l1) (== o ())
+          :else u#)))
+      ((== l1 o))))
+
+  ;; 5ms!, this is the ideal of course
+  (let [s (conj (vec (take 10000 (repeat \space))) \f)]
+   (dotimes [_ 10]
+     (time
+      (dotimes [_ 1]
+        (run 1 [q] (wso-fast s []))))))
+
+  ;; I think I'm wrong about the output var, it doesn't introduce
+  ;; a var
+
+  (let [s (vec (take 10000 (repeat \space)))]
+    (run 1 [q] (wso-fast s [])))
+
+  ;; this takes no times at all
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1]
+       (count (take 10000 (repeat \space))))))
 
   ;; 60ms
   (dotimes [_ 10]
