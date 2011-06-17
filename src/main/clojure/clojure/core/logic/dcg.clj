@@ -209,11 +209,30 @@
   (def alpha (into #{} (concat (cr \a \z) (cr \A \Z))))
   (def alnum (into digits (concat (cr \a \z) (cr \A \Z))))
   (def nonalnum (into #{} "+/-*><="))
-  
+
+  ;; creating atoms are cheap
+
+  ;; IMPORTANT: the reason we don't need to propagate in this case is because
+  ;; we have Clojure rest - that we have a function that directly corresponds
+  ;; to the relation. However most relations don't have any such analog. Thus
+  ;; we have to figure out some way to move information between goals.
+
+  ;; hmm but how will the retv solution work, each goal takes substitution
+
+  ;; the problem with atom solution is that is that we don't have any notion
+  ;; of freshness, we don't know what we're looking at, whether we should
+  ;; unify with it or not. is this actually a problem? A user never introduces
+  ;; the atom, only the DCG syntax. That is we ourselves guarantee that it
+  ;; is alway fresh. And as long as the goal succeeds it's OK to update this
+  ;; value.
+
+  ;; NON-GOAL: we don't want to have to write our code twice. While it is
+  ;; nice that we get backtracking for free from core.logic, this is just
+  ;; requiring too much work for common tasks.
+
   (-->e wso
-    ([])
     ([\space] wso)
-    ([\newline] wso))
+    ([]))
 
   (def-->e digito [x]
     ([_] [x]
@@ -252,6 +271,10 @@
 
   (declare exprso)
 
+  ;; can we secretly create a second function that takes one more parameter?
+  ;; if this parameter true? the fn returns a value instead of a goal
+  ;; then we can have a cascade in a series of bindings.
+  ;; we can at any point return u#
   (def-->e expro [e]
     ([[:sym ?a]] (symo ?a))
     ([[:num ?n]] (numo ?n))
@@ -296,17 +319,22 @@
   ;; this won't work for lists which have
   ;; vars in them, but that's not how DCGs
   ;; are used.
-  (defn wso-fast [l1 o]
-    (conde
-      ((if (lvar? l1)
-         (exist [l3]
-           (== l1 (lcons \space l3))
-           (wso-fast l3 o))
-         (cond ;; TODO: check sequential?
-          (= (first l1) \space) (wso-fast (rest l1) o)
-          (empty? l1) (== o ())
-          :else u#)))
-      ((== l1 o))))
+  (defn wso-fast
+    ([l1 o]
+       (conde
+         ((if (lvar? l1)
+            (exist [l3]
+              (== l1 (lcons \space l3))
+              (wso-fast l3 o))
+            (cond ;; TODO: check sequential?
+             (= (first l1) \space) (wso-fast (rest l1) o)
+             (empty? l1) (if (instance? clojure.lang.Atom o)
+                           (fn [a] (reset! o ()) a)
+                           (== o ()))
+             :else u#)))
+         ((if (instance? clojure.lang.Atom o)
+            (fn [a] (reset! o l1) a)
+            (== l1 o))))))
 
   ;; 3ms!, this is the ideal of course
   (let [s (conj (vec (take 10000 (repeat \space))) \f)]
@@ -318,7 +346,7 @@
   ;; I think I'm wrong about the output var, it doesn't introduce
   ;; a var
 
-  (let [s (vec (take 10000 (repeat \space)))]
+  (let [s (conj (vec (take 10000 (repeat \space))) \f)]
     (run 1 [q] (wso-fast s [])))
 
   ;; this takes no times at all

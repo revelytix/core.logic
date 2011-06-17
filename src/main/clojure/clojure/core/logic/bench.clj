@@ -93,27 +93,32 @@
        (nrevo ?d r)
        (appendo r [?a] o))))
 
+;; how much of this can we optimize automatically?
+;; we should certainly optimize for the DCG case
+
 (defn nrevo-fast [l o]
   (conde
     ((if (lvar? l)
        (all (== l ()) (== o ()))
        (if (empty? l) (== o ()) u#)))
     ((if (lvar? l)
-       (exist [a d r]
-         (conso a d l)
-         (nrevo-fast d r)
-         (appendo r [a] o))
-       (if (empty? l) u#
-           (let [a (first l)
-                 d (rest l)]
-             (exist [r]
-               (nrevo-fast d r)
-               (appendo r [a] o))))))))
+       (if (lvar? o)
+         (exist [a d r]
+           (conso a d l)
+           (nrevo-fast d r)
+           (appendo r [a] o))
+         (if (empty? o) u#
+             (== l (reverse o))))
+       (if (lvar? o)
+         (if (empty? l) u#
+             (== o (reverse l)))
+         (if (= l o) s# u#))))))
 
 (comment
   ;; we can run backwards, unlike Prolog
   (run 1 [q] (nrevo q (range 30)))
   (run 1 [q] (nrevo-fast (range 30) q))
+  (run 1 [q] (nrevo-fast q (range 30)))
 
   ;; SWI-Prolog 0.06-0.08s
   ;; ~4.1s
@@ -124,7 +129,7 @@
          (dotimes [_ 1e3]
            (run 1 [q] (nrevo data q)))))))
 
-  ;; ~3s
+  ;; ~18ms
   (let [data (into [] (range 30))]
     (binding [*occurs-check* false]
       (dotimes [_ 5]
@@ -132,8 +137,16 @@
          (dotimes [_ 1e3]
            (run 1 [q] (nrevo-fast data q)))))))
 
+  ;; <1ms
+  (dotimes [_ 10]
+    (let [r (range 30)]
+     (time
+      (dotimes [_ 1e3]
+        (reverse r)))))
+
   ;; the LIPS are ridiculously high for SWI-Prolog
   ;; clearly nrev is a case that SWI-Prolog can optimize away
+  ;; we can too! if something is ground just flip it!
   )
 
 ;; =============================================================================
@@ -441,7 +454,7 @@
 (defne takeouto [x l y]
   ([_ [x . y] _])
   ([_ [?h . ?t] [?h . ?r]] (takeouto x ?t ?r)))
- 
+
 (defn digito [x l y]
   (takeouto x l y))
   
@@ -474,6 +487,13 @@
     (do-send-moolao [send more money] (range 10) l)))
 
 (comment
+  (run* [q]
+    (takeouto 'a '[a b c] q))
+
+  (run* [q]
+    (exist [x]
+     (digito x '[1 2 3] q)))
+
   ;; ~16-17s, w/o occurs-check
   ;; SWI-Prolog takes 4s, so 3.8X faster
   ;; again I suspect the overhead here is from
