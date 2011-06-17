@@ -335,7 +335,8 @@
 
 (defprotocol LConsSeq
   (lfirst [this])
-  (lnext [this]))
+  (lnext [this])
+  (lrest [this]))
 
 ;; TODO: clean up the printing code
 
@@ -353,6 +354,7 @@
   LConsSeq
   (lfirst [_] a)
   (lnext [_] d)
+  (lrest [_] d)
   LConsPrint
   (toShortString [this]
     (cond

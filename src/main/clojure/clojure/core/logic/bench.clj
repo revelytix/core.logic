@@ -216,82 +216,79 @@
 ;; experiment with groundness checking here
 ;; avoid unification, avoid var creation, avoid consing
 
-(defn firsto [l a]
-  (exist [d]
-    (conso a d l)))
+(defn firsto-fast [l a]
+  (if (lvar? l)
+    (exist [d]
+      (conso a d l))
+    (if (lvar? a)
+      (== (first l) a)
+      (if (= (first l) a) s# u#))))
+
+(defn resto-fast [l d]
+  (if (lvar? l)
+    (exist [a]
+      (== (lcons a d) l))
+    (if (lvar? d)
+      (== (rest l) d)
+      (if (= (rest l) d) s# u#))))
+
+(defn membero-fast [x l]
+  (conde
+    ((firsto-fast l x))
+    ((if (lvar? l)
+       (exist [r]
+         (resto-fast l r)
+         (membero-fast x r))
+       (if-let [r (next l)]
+         (membero-fast x r)
+         u#)))))
+
+(defn righto-fast [x y l]
+  (conde
+    ((if (or (lvar? x) (lvar? y) (lvar? l))
+       (exist [r]
+         (== (llist x y r) l))
+       (let [lx (first l)
+             ly (second l)]
+         (if (and (= x lx) (= y ly))
+           s# u#))))
+    ((cond
+      (lvar? l) (exist [r]
+                  (resto-fast l r)
+                  (righto-fast x y r))
+      (nil? l) u#
+      :else (righto-fast x y (next l))))))
+
+(defn nexto-fast [x y l]
+  (conde
+    ((righto-fast x y l))
+    ((righto-fast y x l))))
+
+(defn zebrao-fast [hs]
+  (all
+   (== [(lvar) (lvar) [(lvar) (lvar) 'milk (lvar) (lvar)] (lvar) (lvar)] hs)                         
+   (firsto-fast hs ['norwegian (lvar) (lvar) (lvar) (lvar)])                         
+   (nexto-fast ['norwegian (lvar) (lvar) (lvar) (lvar)] [(lvar) (lvar) (lvar) (lvar) 'blue] hs)       
+   (righto-fast [(lvar) (lvar) (lvar) (lvar) 'ivory] [(lvar) (lvar) (lvar) (lvar) 'green] hs)         
+   (membero-fast ['englishman (lvar) (lvar) (lvar) 'red] hs)                    
+   (membero-fast [(lvar) 'kools (lvar) (lvar) 'yellow] hs)                      
+   (membero-fast ['spaniard (lvar) (lvar) 'dog (lvar)] hs)                      
+   (membero-fast [(lvar) (lvar) 'coffee (lvar) 'green] hs)                      
+   (membero-fast ['ukrainian (lvar) 'tea (lvar) (lvar)] hs)                     
+   (membero-fast [(lvar) 'lucky-strikes 'oj (lvar) (lvar)] hs)                  
+   (membero-fast ['japanese 'parliaments (lvar) (lvar) (lvar)] hs)              
+   (membero-fast [(lvar) 'oldgolds (lvar) 'snails (lvar)] hs)                   
+   (nexto-fast [(lvar) (lvar) (lvar) 'horse (lvar)] [(lvar) 'kools (lvar) (lvar) (lvar)] hs)          
+   (nexto-fast [(lvar) (lvar) (lvar) 'fox (lvar)] [(lvar) 'chesterfields (lvar) (lvar) (lvar)] hs)))
+
+(run* [q]
+  (zebrao-fast q))
 
 (comment
   ;; if l is ground, we can use first
   ;; if a is ground, we can just do ==
   ;; if a is not ground, unify
 
-  (defn firsto-fast [l a]
-    (if (lvar? l)
-      (exist [d]
-        (conso a d l))
-      (if (lvar? a)
-        (== (first l) a)
-        (if (= (first l) a) s# u#))))
-
-  (defn resto-fast [l d]
-    (if (lvar? l)
-      (exist [a]
-        (== (lcons a d) l))
-      (if (lvar? d)
-        (== (rest l) d)
-        (if (= (rest l) d) s# u#))))
-
-  (defn membero-fast [x l]
-    (conde
-      ((firsto-fast l x))
-      ((if (lvar? l)
-         (exist [r]
-           (resto-fast l r)
-           (membero-fast x r))
-         (if-let [r (next l)]
-           (membero-fast x r)
-           u#)))))
-
-  (defn righto-fast [x y l]
-    (conde
-      ((if (or (lvar? x) (lvar? y) (lvar? l))
-         (exist [r]
-           (== (llist x y r) l))
-         (let [lx (first l)
-               ly (second l)]
-           (if (and (= x lx) (= y ly))
-             s# u#))))
-      ((cond
-        (lvar? l) (exist [r]
-                    (resto-fast l r)
-                    (righto-fast x y r))
-        (nil? l) u#
-        :else (righto-fast x y (next l))))))
-
-  (defn nexto-fast [x y l]
-    (conde
-      ((righto-fast x y l))
-      ((righto-fast y x l))))
-
-  (defn zebrao-fast [hs]
-    (all
-     (== [(lvar) (lvar) [(lvar) (lvar) 'milk (lvar) (lvar)] (lvar) (lvar)] hs)                         
-     (firsto-fast hs ['norwegian (lvar) (lvar) (lvar) (lvar)])                         
-     (nexto-fast ['norwegian (lvar) (lvar) (lvar) (lvar)] [(lvar) (lvar) (lvar) (lvar) 'blue] hs)       
-     (righto-fast [(lvar) (lvar) (lvar) (lvar) 'ivory] [(lvar) (lvar) (lvar) (lvar) 'green] hs)         
-     (membero-fast ['englishman (lvar) (lvar) (lvar) 'red] hs)                    
-     (membero-fast [(lvar) 'kools (lvar) (lvar) 'yellow] hs)                      
-     (membero-fast ['spaniard (lvar) (lvar) 'dog (lvar)] hs)                      
-     (membero-fast [(lvar) (lvar) 'coffee (lvar) 'green] hs)                      
-     (membero-fast ['ukrainian (lvar) 'tea (lvar) (lvar)] hs)                     
-     (membero-fast [(lvar) 'lucky-strikes 'oj (lvar) (lvar)] hs)                  
-     (membero-fast ['japanese 'parliaments (lvar) (lvar) (lvar)] hs)              
-     (membero-fast [(lvar) 'oldgolds (lvar) 'snails (lvar)] hs)                   
-     (nexto-fast [(lvar) (lvar) (lvar) 'horse (lvar)] [(lvar) 'kools (lvar) (lvar) (lvar)] hs)          
-     (nexto-fast [(lvar) (lvar) (lvar) 'fox (lvar)] [(lvar) 'chesterfields (lvar) (lvar) (lvar)] hs)))
-
-  (run* [q]
-    (zebrao-fast q))
 
   ;; 2.2s, interesting slightly slower
   (binding [*occurs-check* false]
@@ -507,6 +504,154 @@
   )
 
 ;; =============================================================================
+;; send more money fast
+
+;; pattern matching could probably help here
+;; BROKEN we can't use atom, because atom would then be shared across conde
+;; branches, busted
+;; we could put DCG support directly into subst
+
+;; METADATA idea:
+;; problems we could put metadata on the substitution
+;; but how do we know that subgoals won't also put metadata on?
+;; broken
+
+;; OK, last parameter is a ground term - PersistentHashMap
+;; each goal just puts the value of the DCG operation into it
+;; the next goal remove it after using it.
+
+;; conflicting desires, control scope, not introduce a var
+;; not have something that keeps growing
+;; WeakReferenceMap ? Nope can't be shared across goals
+;; PersistentHashMap ...
+
+;; all DCG goals take an extra parameter, a PersistentHashMap that
+;; stores intermediate calculuations, these are cleared out when
+;; the goal exits
+
+;; seems like just creating a atom which the goal can set it is
+;; 2X cheaper
+
+;; we have to deal w/ lcons
+;; and we can't use first rest
+
+(defn lempty? [x]
+  (and (seq? x) (empty? x)))
+
+(extend-type clojure.lang.Sequential
+  LConsSeq
+  (lfirst [this]
+    (first this))
+  (lnext [this]
+    (next this))
+  (lrest [this]
+    (rest this)))
+
+(defn takeouto-fast [x l y]
+  (fn [s]
+    (let [x (walk s x)
+          l (walk s l)
+          y (walk s y)]
+      ((conde
+         ((if (or (lvar? x) (lvar? l))
+            (== (lcons x y) l)
+            (let [f (lfirst l)
+                  r (lrest l)]
+              (if (= f x) (== y r) u#))))
+         ((if (lvar? l)
+            (if (lvar? y)
+              (exist [h t r]
+                (conso h t l)
+                (conso h r y)
+                (takeouto x t r))
+              ;; missing branch
+              )
+            (if (lvar? y)
+              (if (lempty? l)
+                u#
+                (let [h (lfirst l)
+                      t (lrest l)]
+                  (exist [r]
+                    (conso h r y)
+                    (takeouto-fast x t r))))
+              (if (or (lempty? l) (lempty? y))
+                u#
+                (let [t (lrest l)
+                      r (lrest y)]
+                  (takeouto-fast x t r))))))) s))))
+
+(defn digito-fast [x l y]
+  (takeouto-fast x l y))
+  
+(defn first-digito-fast [x l y]
+  (all
+   (digito-fast x l y)
+   (a/> x 0)))
+
+(defne do-send-moolao-fast [q l ll]
+  ([[?send ?more ?money] _ _]
+     (exist [s e n d m o r y
+             l1 l2 l3 l4 l5 l6 l7 l8 l9]
+       (first-digito-fast s l l1)
+       (first-digito-fast m l1 l2)
+       (digito-fast e l2 l3)
+       (digito-fast n l3 l4)
+       (digito-fast d l4 l5)
+       (digito-fast o l5 l6)
+       (digito-fast r l6 l7)
+       (digito-fast y l7 l8)
+       (nonrel/project [s e n d m o r y]
+         (== ?send (+ (* s 1000) (* e 100) (* n 10) d))
+         (== ?more (+ (* m 1000) (* o 100) (* r 10) e))
+         (== ?money (+ (* m 10000) (* o 1000) (* n 100) (* e 10) y))
+         (nonrel/project [?send ?more]
+           (== ?money (+ ?send ?more)))))))
+
+(defn send-money-quicklyo-fast [send more money]
+  (exist [l]
+    (do-send-moolao-fast [send more money] (vec (range 10)) l)))
+
+(comment
+  (run* [q]
+    (takeouto 2 [1 2 3] q))
+
+  ;; 300ms
+  ;; 320ms w/ walking
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e4]
+       (run* [q]
+         (takeouto 2 [1 2 3] q)))))
+
+  (def test (atom nil))
+  (run* [q]
+    (takeouto 2 [1 2 3] q))
+
+  ;; 90ms
+  ;; 130ms w/ walking
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e4]
+      (run* [q]
+        (takeouto-fast 2 [1 2 3] q)))))
+
+  ;; without atom optimization
+  ;; 14s, getting w/in 3X
+  ;; ~10s-11s with walking
+  (time
+   (binding [*occurs-check* false]
+     (run 1 [q]
+       (exist [send more money]
+         (send-money-quicklyo-fast send more money)
+         (== [send more money] q)))))
+
+  (run 1 [q]
+       (exist [send more money]
+         (send-money-quicklyo-fast send more money)
+         (== [send more money] q)))
+  )
+
+;; =============================================================================
 ;; Quick Sort
 
 (declare partitiono)
@@ -526,3 +671,41 @@
          (== (<= ?x b) true))
        (partition ?l b ?l1 d))
       (partition ?l b c d))))
+
+(comment
+  ;; 2.2s, we have to use persistent hashmap
+  ;; and it needs to be in the substitution
+  (dotimes [_ 10]
+    (let [m {}]
+     (time
+      (dotimes [_ 1e6]
+        (let [[a b c d] (map lvar '[a b c d])]
+         (-> m
+             (assoc a 2)
+             (assoc b 2)
+             (assoc c 2)
+             (assoc d 2)))))))
+
+  ;; 998ms
+  ;; cheaper to create atoms for connecting the goals
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e6]
+       (let [[a b c d] (map atom [1 2 3 4])]
+         (do
+           (reset! a 2)
+           (reset! b 2)
+           (reset! c 2)
+           (reset! d 2))))))
+
+  ;; 1.3s
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e6]
+       (let [[a b c d] (take 4 (repeatedly promise))]
+         (do
+           (deliver a 2)
+           (deliver b 2)
+           (deliver c 2)
+           (deliver d 2))))))
+  )
