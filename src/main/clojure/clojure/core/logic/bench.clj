@@ -9,6 +9,9 @@
 ;; =============================================================================
 ;; Utilities
 
+(defn conso [a d l]
+  (== (lcons a d) l))
+
 (defne membero [x l]
   ([_ [x . ?tail]])
   ([_ [?head . ?tail]]
@@ -25,6 +28,26 @@
   ([() _ y])
   ([[?a . ?d] _ [?a . ?r]] (appendo ?d y ?r)))
 
+(defn appendo-fast [x y z]
+  (conde
+    ((if (or (lvar? x) (lvar? y))
+       (all
+        (== x ())
+        (== y z))
+       (if (= x ()) (== y z) u#)))
+    ((if (or (lvar? x) (lvar? y))
+       (exist [a d r]
+         (conso a d x)
+         (conso a r z)
+         (appendo-fast d y r))
+       (if (empty? x)
+         u#
+         (let [a (first x)
+               d (rest x)]
+           (exist [r]
+             (conso a r z)
+             (appendo-fast d y r))))))))
+
 (comment
   (run 1 [q]
     (exist [x y]
@@ -37,6 +60,26 @@
        (run 700 [q]
          (exist [x y]
            (appendo x y q))))))
+
+  (run* [q]
+    (appendo-fast [1 2] [3 4] q))
+
+  ;; 100ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e4]
+       (run* [q]
+         (appendo-fast [1 2] [3 4] q)))))
+
+  ;; 200ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e4]
+       (run* [q]
+         (appendo [1 2] [3 4] q)))))
+
+  ;; if we do groudness testing, we optimize only a certain kinds of usages
+  ;; common usages. for example optimizing reverse runs?
   )
 
 ;; =============================================================================
@@ -50,9 +93,27 @@
        (nrevo ?d r)
        (appendo r [?a] o))))
 
+(defn nrevo-fast [l o]
+  (conde
+    ((if (lvar? l)
+       (all (== l ()) (== o ()))
+       (if (empty? l) (== o ()) u#)))
+    ((if (lvar? l)
+       (exist [a d r]
+         (conso a d l)
+         (nrevo-fast d r)
+         (appendo r [a] o))
+       (if (empty? l) u#
+           (let [a (first l)
+                 d (rest l)]
+             (exist [r]
+               (nrevo-fast d r)
+               (appendo r [a] o))))))))
+
 (comment
   ;; we can run backwards, unlike Prolog
   (run 1 [q] (nrevo q (range 30)))
+  (run 1 [q] (nrevo-fast (range 30) q))
 
   ;; SWI-Prolog 0.06-0.08s
   ;; ~4.1s
@@ -63,6 +124,14 @@
          (dotimes [_ 1e3]
            (run 1 [q] (nrevo data q)))))))
 
+  ;; ~3s
+  (let [data (into [] (range 30))]
+    (binding [*occurs-check* false]
+      (dotimes [_ 5]
+        (time
+         (dotimes [_ 1e3]
+           (run 1 [q] (nrevo-fast data q)))))))
+
   ;; the LIPS are ridiculously high for SWI-Prolog
   ;; clearly nrev is a case that SWI-Prolog can optimize away
   )
@@ -70,9 +139,6 @@
 ;; =============================================================================
 ;; zebra
 ;; =============================================================================
-
-(defn conso [a d l]
-  (== (lcons a d) l))
 
 (defn firsto [l a]
   (exist [d]
@@ -145,6 +211,167 @@
   ;; if l is ground, we can use first
   ;; if a is ground, we can just do ==
   ;; if a is not ground, unify
+
+  (defn firsto-fast [l a]
+    (if (lvar? l)
+      (exist [d]
+        (conso a d l))
+      (if (lvar? a)
+        (== (first l) a)
+        (if (= (first l) a) s# u#))))
+
+  (defn resto-fast [l d]
+    (if (lvar? l)
+      (exist [a]
+        (== (lcons a d) l))
+      (if (lvar? d)
+        (== (rest l) d)
+        (if (= (rest l) d) s# u#))))
+
+  (defn membero-fast [x l]
+    (conde
+      ((firsto-fast l x))
+      ((if (lvar? l)
+         (exist [r]
+           (resto-fast l r)
+           (membero-fast x r))
+         (if-let [r (next l)]
+           (membero-fast x r)
+           u#)))))
+
+  (defn righto-fast [x y l]
+    (conde
+      ((if (or (lvar? x) (lvar? y) (lvar? l))
+         (exist [r]
+           (== (llist x y r) l))
+         (let [lx (first l)
+               ly (second l)]
+           (if (and (= x lx) (= y ly))
+             s# u#))))
+      ((cond
+        (lvar? l) (exist [r]
+                    (resto-fast l r)
+                    (righto-fast x y r))
+        (nil? l) u#
+        :else (righto-fast x y (next l))))))
+
+  (defn nexto-fast [x y l]
+    (conde
+      ((righto-fast x y l))
+      ((righto-fast y x l))))
+
+  (defn zebrao-fast [hs]
+    (all
+     (== [(lvar) (lvar) [(lvar) (lvar) 'milk (lvar) (lvar)] (lvar) (lvar)] hs)                         
+     (firsto-fast hs ['norwegian (lvar) (lvar) (lvar) (lvar)])                         
+     (nexto-fast ['norwegian (lvar) (lvar) (lvar) (lvar)] [(lvar) (lvar) (lvar) (lvar) 'blue] hs)       
+     (righto-fast [(lvar) (lvar) (lvar) (lvar) 'ivory] [(lvar) (lvar) (lvar) (lvar) 'green] hs)         
+     (membero-fast ['englishman (lvar) (lvar) (lvar) 'red] hs)                    
+     (membero-fast [(lvar) 'kools (lvar) (lvar) 'yellow] hs)                      
+     (membero-fast ['spaniard (lvar) (lvar) 'dog (lvar)] hs)                      
+     (membero-fast [(lvar) (lvar) 'coffee (lvar) 'green] hs)                      
+     (membero-fast ['ukrainian (lvar) 'tea (lvar) (lvar)] hs)                     
+     (membero-fast [(lvar) 'lucky-strikes 'oj (lvar) (lvar)] hs)                  
+     (membero-fast ['japanese 'parliaments (lvar) (lvar) (lvar)] hs)              
+     (membero-fast [(lvar) 'oldgolds (lvar) 'snails (lvar)] hs)                   
+     (nexto-fast [(lvar) (lvar) (lvar) 'horse (lvar)] [(lvar) 'kools (lvar) (lvar) (lvar)] hs)          
+     (nexto-fast [(lvar) (lvar) (lvar) 'fox (lvar)] [(lvar) 'chesterfields (lvar) (lvar) (lvar)] hs)))
+
+  (run* [q]
+    (zebrao-fast q))
+
+  ;; 2.2s, interesting slightly slower
+  (binding [*occurs-check* false]
+    (dotimes [_ 5]
+      (time
+       (dotimes [_ 1e3]
+         (run 1 [q] (zebrao-fast q))))))
+
+  (run* [q]
+    (nexto-fast 'b 'c '[c a b]))
+
+  (run* [q]
+    (firsto-fast '[a b] 'a))
+
+  ;; 486ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (exist [x]
+           (== x 'a)
+           (firsto '[a b] x))))))
+
+  ;; 400ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (resto '[1 2 3 4] q)))))
+
+  ;; 2.7s
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (membero 4 [1 2 3 4])))))
+
+  ;; ~2s
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e4]
+       (run* [q]
+         (righto 'a 'b '[c d a b])))))
+
+  ;; 263ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (exist [x]
+           (== x 'a)
+           (firsto-fast '[a b] x))))))
+
+  ;; 270ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (resto-fast '[1 2 3 4] q)))))
+
+  ;; 180ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (resto-fast [1 2 3 4] [2 3 4])))))
+
+  (run* [q]
+    (resto-fast [1 2 3 4] q))
+
+  (run* [q]
+    (firsto-fast [1 2 3 4] q))
+
+  ;; 350ms!
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (membero-fast 4 [1 2 3 4])))))
+
+  ;; 400ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (righto-fast 'a 'b '[c d a b])))))
+
+  ;; 700ms
+  (dotimes [_ 10]
+    (time
+     (dotimes [_ 1e5]
+       (run* [q]
+         (nexto-fast 'a 'b '[c d a b])))))
   )
 
 ;; =============================================================================
