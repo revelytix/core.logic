@@ -6,9 +6,13 @@
 ;; TODO: think about indexing
 ;; TODO: note that rest args are problematic since we add two invisible args
 ;; TODO: make handle-clause polymorphic, we don't want to futz around with
-;; with forcing macroexpand
+;;       with forcing macroexpand - to support DCG tranform on forms other than
+;;       exist
 ;; TODO: exist? and !dcg? are odd, why can't we check w/ `sym
-;; TODO: !, support transformation to condu
+
+;; TODO: ->lcons, add groudness check
+;; TODO: get rid of intermediate lvar generation between goals
+;; TODO: defne, add groundness check
 
 (defn lsym [n]
   (gensym (str "l" n "_")))
