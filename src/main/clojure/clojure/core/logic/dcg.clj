@@ -304,9 +304,18 @@
   ;; (_.0)
   (run* [q]
     (wso (vec "  ") []))
-
+  ;; ([\space \space \space] (\space \space) (\space) ())
   (run* [q]
     (wso (vec "   ") q))
+
+  ;; ([] (\space) (\space \space))
+  (run 3 [q]
+    (wso q []))
+
+  ;; (_.0 (  . _.0) (    . _.0))
+  (run 3 [q]
+    (exist [x]
+     (wso q x)))
 
   ;; grows linearly with the number of spaces
   ;; 1.4s, 18spaces

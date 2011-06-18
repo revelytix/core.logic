@@ -239,7 +239,8 @@ Roadmap
 The core Prolog aspect of core.logic is nearing completion. The following are tentative future directions:
 
 * Negation - Stratified Negation as provided by XSB ?
-* Definite Clause Grammar
+* Groundess Optimization
+* DCG optimization
 * Constraint Logic Programming - Constraint Handling Rules (CHR) is particularly inspiring
 
 YourKit

@@ -532,8 +532,7 @@
 ;; seems like just creating a atom which the goal can set it is
 ;; 2X cheaper
 
-;; we have to deal w/ lcons
-;; and we can't use first rest
+;; Why can't we just put the DCG info in the Substitution?
 
 (defn lempty? [x]
   (and (seq? x) (empty? x)))
@@ -588,6 +587,13 @@
    (digito-fast x l y)
    (a/> x 0)))
 
+;; what if we pushed DCG below the surface? at the level of
+;; the goals code?
+
+;; not a good idea, we should put the diff-list in the substitution
+;; if a DCG goal is called a lvar for either l1 or l2 we go
+;; the following transformation, if the both 
+
 (defne do-send-moolao-fast [q l ll]
   ([[?send ?more ?money] _ _]
      (exist [s e n d m o r y
@@ -627,6 +633,9 @@
   (run* [q]
     (takeouto 2 [1 2 3] q))
 
+  (run* [q]
+    (takeouto 1 [1 2 3] q))
+
   ;; 90ms
   ;; 130ms w/ walking
   (dotimes [_ 10]
@@ -638,6 +647,10 @@
   ;; without atom optimization
   ;; 14s, getting w/in 3X
   ;; ~10s-11s with walking
+  ;; beter w/in 2.6X of SWI-Prolog
+  ;; if we can eliminate all the overhead from
+  ;; the DCG data passing we can probably reach
+  ;; SWI
   (time
    (binding [*occurs-check* false]
      (run 1 [q]
